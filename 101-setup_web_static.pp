@@ -1,69 +1,63 @@
-# Prepare web server for deployment
-
-exec {'update':
-  provider => shell,
-  command  => 'sudo apt-get -y update',
-  before   => Exec['install nginx'],
+# Setup the web servers for the deployment of web_static
+exec { '/usr/bin/env apt -y update' : }
+-> package { 'nginx':
+  ensure => installed,
 }
-
-exec {'install nginx':
-  provider => shell,
-  command  => 'sudo apt-get -y install nginx',
-  before   => Exec['start nginx'],
+-> file { '/data':
+  ensure  => 'directory'
 }
-
-exec {'start nginx':
-  provider => shell,
-  command  => 'sudo service nginx start',
-  before   => Exec['create test directory'],
+-> file { '/data/web_static':
+  ensure => 'directory'
 }
-
-exec {'create shared directory':
-  provider => shell,
-  command  => 'sudo mkdir -p /data/web_static/shared/',
-  before   => Exec['create test directory'],
+-> file { '/data/web_static/releases':
+  ensure => 'directory'
 }
-
-exec {'create test directory':
-  provider => shell,
-  command  => 'sudo mkdir -p /data/web_static/releases/test/',
-  before   => Exec['add test content'],
+-> file { '/data/web_static/releases/test':
+  ensure => 'directory'
 }
-
-exec {'add test content':
-  provider => shell,
-  command  => 'echo "<html>
-    <head>
-    </head>
-    <body>
-      Holberton School
-    </body>
-  </html>" > /data/web_static/releases/test/index.html',
-  before   => Exec['create symbolic link to current'],
+-> file { '/data/web_static/shared':
+  ensure => 'directory'
 }
-
-exec {'create symbolic link to current':
-  provider => shell,
-  command  => 'sudo ln -sf /data/web_static/releases/test/ /data/web_static/current',
-  before   => File['/data/'],
+-> file { '/data/web_static/releases/test/index.html':
+  ensure  => 'present',
+  content => "<!DOCTYPE html>
+<html>
+  <head>
+  </head>
+  <body>
+    <p>Nginx server test</p>
+  </body>
+</html>"
 }
-
-file {'/data/':
-  ensure  => directory,
-  owner   => 'ubuntu',
-  group   => 'ubuntu',
-  recurse => true,
-  before  => Exec['serve current to hbnb_static'],
+-> file { '/data/web_static/current':
+  ensure => 'link',
+  target => '/data/web_static/releases/test'
 }
-
-exec {'serve current to hbnb_static':
-  provider => shell,
-  command  => 'sed -i "61i\ \n\tlocation /hbnb_static {\n\t\talias /data/web_static/current;\n\t\tautoindex off;\n\t}" /etc/nginx/sites-available/default',
-  before   => Exec['restart nginx'],
+-> exec { 'chown -R ubuntu:ubuntu /data/':
+  path => '/usr/bin/:/usr/local/bin/:/bin/'
 }
-
-exec {'restart nginx':
-  provider => shell,
-  command  => 'sudo service nginx restart',
+-> file { '/var/www':
+  ensure => 'directory'
 }
-
+-> file { '/var/www/html':
+  ensure => 'directory'
+}
+-> file { '/var/www/html/index.html':
+  ensure  => 'present',
+  content => "<!DOCTYPE html>
+<html>
+  <head>
+  </head>
+  <body>
+    <p>Nginx server test</p>
+  </body>
+</html>"
+}
+exec { 'nginx_conf':
+  environment => ['data=\ \tlocation /hbnb_static {\n\t\talias /data/web_static/current;\n\t}\n'],
+  command     => 'sed -i "39i $data" /etc/nginx/sites-enabled/default',
+  path        => '/usr/bin:/usr/sbin:/bin:/usr/local/bin'
+}
+-> service { 'nginx':
+  ensure => running,
+}
